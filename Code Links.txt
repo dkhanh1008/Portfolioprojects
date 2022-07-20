@@ -1,0 +1,123 @@
+https://console.cloud.google.com/bigquery?sq=785845954549:cbecfab978c94911b8650ee0b7ba3108
+
+SELECT * 
+ FROM `bright-crossbar-356511.portfolio.covidDeath` 
+ WHERE continent is not null 
+ order by 3,4 
+
+ /*
+ SELECT * 
+ FROM `bright-crossbar-356511.portfolio.covidVaccination` 
+ order by 3,4 */ 
+
+ -- Select Data that we are going to be using 
+
+ SELECT location, date, total_cases, new_cases, total_deaths, population 
+ FROM `bright-crossbar-356511.portfolio.covidDeath` 
+WHERE continent is not null 
+ ORDER BY 1,2 
+
+ --Looking at Total cases vs Total Deaths
+ SELECT location, date, total_cases, total_deaths, (total_deaths/total_cases)*100 as DeathPercentage
+ FROM `bright-crossbar-356511.portfolio.covidDeath`  
+ WHERE location LIKE '%States%'AND continent is not null 
+ ORDER BY 1,2 
+
+ -- Looking at percentage rate of population that have covids 
+ SELECT location, date, total_cases, total_deaths, (total_deaths/population)*100 as PercentagePopulationInfected
+ FROM `bright-crossbar-356511.portfolio.covidDeath` 
+ WHERE location LIKE '%Japan%' AND continent is not null 
+ ORDER BY 1,2 
+
+ -- Looking at Countries with Highest Infection rate compared to Population 
+SELECT location,population, MAX(total_cases) AS HighestInfectionCount,MAX ((total_deaths/population)*100) as PercentagePopulationInfected
+ FROM `bright-crossbar-356511.portfolio.covidDeath` 
+-- WHERE location LIKE '%Japan%'
+WHERE continent is not null 
+ GROUP BY location, population
+ ORDER BY PercentagePopulationInfected DESC 
+
+ --Showing Countries with Highest Death Count per population 
+ SELECT location, MAX(CAST(total_deaths AS INT)) as TotalDeathCount
+ FROM `bright-crossbar-356511.portfolio.covidDeath` 
+ -- WHERE location LIKE '%Japan%'
+ WHERE continent is not null 
+ GROUP BY location
+ ORDER BY TotalDeathCount DESC 
+
+-- Let's break thing down by continent 
+
+-- Showing continent with highest death per population 
+ SELECT continent, MAX(CAST(total_deaths AS INT)) as TotalDeathCount
+ FROM `bright-crossbar-356511.portfolio.covidDeath` 
+ -- WHERE location LIKE '%Japan%'
+ WHERE continent is not null 
+ GROUP BY continent
+ ORDER BY TotalDeathCount DESC 
+
+
+-- Global numbers
+ SELECT SUM(new_cases) as total_cases, SUM(CAST(new_deaths AS INT)) as total_deaths, SUM(CAST(new_deaths AS INT) )/SUM(new_cases) *100 AS DeathPercentage
+ FROM `bright-crossbar-356511.portfolio.covidDeath`  
+ WHERE continent is not null 
+ --GROUP BY date
+ ORDER BY 1,2 
+
+ -- Looking at total population vs vaccination 
+
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, SUM(CAST(vac.new_vaccinations AS INT)) OVER (PARTITION by dea.location ORDER BY dea.location,dea.date) AS RollingPeopleVacinated 
+FROM `bright-crossbar-356511.portfolio.covidDeath`  AS dea
+JOIN `bright-crossbar-356511.portfolio.covidVacination`  AS vac
+ON dea.location = vac.location AND dea.date = vac.date
+WHERE dea.continent IS NOT NULL
+ORDER BY 2,3
+
+--- USE CTE 
+WITH PopvsVac 
+AS ( 
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, SUM(CAST(vac.new_vaccinations AS INT)) OVER (PARTITION by dea.location ORDER BY dea.location,dea.date) AS RollingPeopleVacinated 
+FROM `bright-crossbar-356511.portfolio.covidDeath`  AS dea
+JOIN `bright-crossbar-356511.portfolio.covidVacination`  AS vac
+ON dea.location = vac.location AND dea.date = vac.date
+WHERE dea.continent IS NOT NULL
+--ORDER BY 2,3
+) 
+SELECT *, (RollingPeopleVacinated /population) * 100
+FROM PopvsVac
+ 
+
+ -- USE Temp table 
+ DROP TABLE IF exists #PercenpopulationVaccinated 
+ CREATE TABLE PercenpopulationVaccinated
+(
+   continent NVARCHAR(255),
+   location  NVARCHAR(255),
+   date DATETIME,
+   POPULATION NUMERIC, 
+   New_vaccination NUMERIC, 
+   RollingPeopleVacinated NUMERIC
+)
+ 
+ INSERT INTO #PercenpopulationVaccinated 
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, SUM(CAST(vac.new_vaccinations AS INT)) OVER (PARTITION by dea.location ORDER BY dea.location,dea.date) AS RollingPeopleVacinated 
+FROM `bright-crossbar-356511.portfolio.covidDeath`  AS dea
+JOIN `bright-crossbar-356511.portfolio.covidVacination`  AS vac
+ON dea.location = vac.location AND dea.date = vac.date
+WHERE dea.continent IS NOT NULL
+
+SELECT *, (RollingPeopleVacinated /population) * 100
+FROM #PercenpopulationVaccinated 
+
+CREATE VIEW portfolio.PopvsVac_good AS 
+WITH PopvsVac 
+AS ( 
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, SUM(CAST(vac.new_vaccinations AS INT)) OVER (PARTITION by dea.location ORDER BY dea.location,dea.date) AS RollingPeopleVacinated 
+FROM `bright-crossbar-356511.portfolio.covidDeath`  AS dea
+JOIN `bright-crossbar-356511.portfolio.covidVacination`  AS vac
+ON dea.location = vac.location AND dea.date = vac.date
+WHERE dea.continent IS NOT NULL
+--ORDER BY 2,3
+) 
+SELECT *, (RollingPeopleVacinated /population) * 100 AS 
+FROM PopvsVac
+
